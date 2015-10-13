@@ -41,8 +41,8 @@ typedef gem::readout::GEMDataAMCformat::VFATData AMCVFATData;
 void gem::supervisor::tbutils::LatencyScan::ConfigParams::registerFields(xdata::Bag<ConfigParams> *bag)
 {
 
-  minLatency    = 13U;
-  maxLatency    = 17U;
+  minLatency    = 10U;
+  maxLatency    = 20U;
   stepSize      = 1U;
   nTriggers = 10;
   threshold = -100;
@@ -109,7 +109,7 @@ bool gem::supervisor::tbutils::LatencyScan::run(toolbox::task::WorkLoop* wl)
 
   //send L1A and Calpulse
   hw_semaphore_.take();//oh sendL1ACalpulse
-  optohybridDevice_->SendL1ACal(1,100);   
+  optohybridDevice_->SendL1ACal(1,15);   
   sleep(1);
 
   //count triggers
