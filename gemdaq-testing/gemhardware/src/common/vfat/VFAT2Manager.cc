@@ -5,11 +5,7 @@
 
 #include "xdaq/NamespaceURI.h"
 
-#include "xoap/MessageReference.h"
 #include "xoap/MessageFactory.h"
-#include "xoap/SOAPEnvelope.h"
-#include "xoap/SOAPConstants.h"
-#include "xoap/SOAPBody.h"
 #include "xoap/Method.h"
 #include "xoap/AttachmentPart.h"
 
@@ -46,11 +42,6 @@ xdaq::WebApplication(s)
   getApplicationInfoSpace()->fireItemValueRetrieve("device", &device_);
   getApplicationInfoSpace()->fireItemValueRetrieve("ipAddr", &ipAddr_);
   getApplicationInfoSpace()->fireItemValueRetrieve("settingsFile", &settingsFile_);
-
-  //                                                                                   
-  // Bind SOAP callback                                                                  
-  //                                                                                    
-  xoap::bind(this, &gem::hw::vfat::VFAT2Manager::onMessage, "onMessage", XDAQ_NS_URI );
 
 }
 
@@ -952,17 +943,4 @@ void gem::hw::vfat::VFAT2Manager::performAction(cgicc::Cgicc cgi, std::vector<st
     m_vfatParams = vfatDevice->getVFAT2Params();
   }
   //m_vfatParams = vfatDevice->getVFAT2Params();
-}
-xoap::MessageReference gem::hw::vfat::VFAT2Manager::onMessage (xoap::MessageReference msg) throw (xoap::exception::Exception)
-{
-
-  LOG4CPLUS_INFO(this->getApplicationLogger(),"-------------------SOAP Message Received-----------------");
-
-  // reply to caller                                                                       
-  xoap::MessageReference reply         = xoap::createMessage();
-  xoap::SOAPEnvelope     envelope      = reply->getSOAPPart().getEnvelope();
-  xoap::SOAPName         responseName  = envelope.createName( "onMessageResponse", "xdaq", XDAQ_NS_URI);
-  xoap::SOAPBodyElement  e             = envelope.getBody().addBodyElement ( responseName );
-  return reply;
-
 }

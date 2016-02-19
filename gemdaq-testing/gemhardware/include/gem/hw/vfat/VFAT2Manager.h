@@ -52,9 +52,6 @@ namespace gem {
 
           ~VFAT2Manager();
 
-	  virtual xoap::MessageReference onMessage(xoap::MessageReference message)
-	    throw (xoap::exception::Exception);
-	  
           void Default(xgi::Input *in, xgi::Output *out )
             throw (xgi::exception::Exception);
           void RegisterView(xgi::Input *in, xgi::Output *out )

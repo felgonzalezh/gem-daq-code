@@ -28,20 +28,6 @@ namespace gem {
           throw (xgi::exception::Exception);
         void webStart(xgi::Input *in, xgi::Output *out)
           throw (xgi::exception::Exception);
-        /*
-          void webStop(xgi::Input *in, xgi::Output *out)
-          throw (xgi::exception::Exception);
-          void webInitialize(xgi::Input *in, xgi::Output *out)
-          throw (xgi::exception::Exception);
-          void webHalt(xgi::Input *in, xgi::Output *out)
-          throw (xgi::exception::Exception);
-          void webReset(xgi::Input *in, xgi::Output *out)
-          throw (xgi::exception::Exception);
-          void webResetCounters(xgi::Input *in, xgi::Output *out)
-          throw (xgi::exception::Exception);
-          void webSendFastCommands(xgi::Input *in, xgi::Output *out)
-          throw (xgi::exception::Exception);
-        */
 
         //workloop functions
         bool run(       toolbox::task::WorkLoop* wl);
@@ -54,17 +40,7 @@ namespace gem {
           throw (toolbox::fsm::exception::Exception);
         void resetAction(toolbox::Event::Reference e)
           throw (toolbox::fsm::exception::Exception);
-        /*
-          void initializeAction(toolbox::Event::Reference e)
-          throw (toolbox::fsm::exception::Exception);
-          void stopAction(toolbox::Event::Reference e)
-          throw (toolbox::fsm::exception::Exception);
-          void haltAction(toolbox::Event::Reference e)
-          throw (toolbox::fsm::exception::Exception);
-          void noAction(toolbox::Event::Reference e)
-          throw (toolbox::fsm::exception::Exception);
-        */
-	  
+
         //web display helpers
         void scanParameters(xgi::Output* out)
           throw (xgi::exception::Exception);
@@ -92,10 +68,10 @@ namespace gem {
       private:
 
         //ConfigParams confParams_;
-        xdata::Bag<ConfigParams> m_scanParams;
+        xdata::Bag<ConfigParams> scanParams_;
 
-        int m_minThresh, m_maxThresh;
-        uint64_t m_stepSize, m_latency;
+        int minThresh_, maxThresh_;
+        uint64_t stepSize_, latency_;
 	  
       protected:
 	  
