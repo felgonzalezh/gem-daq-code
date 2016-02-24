@@ -70,7 +70,7 @@ gem::supervisor::tbutils::ThresholdScan::ThresholdScan(xdaq::ApplicationStub * s
   xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::ThresholdScan::webConfigure,    "Configure"  );
   xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::ThresholdScan::webStart,        "Start"      );
   runSig_   = toolbox::task::bind(this, &ThresholdScan::run,        "run"       );
-  readSig_  = toolbox::task::bind(this, &ThresholdScan::readFIFO,   "readFIFO"  );
+  SelectSig_  = toolbox::task::bind(this, &ThresholdScan::selectAction,   "selectAction"  );
 
   // Initiate and activate main workloop  
   wl_ = toolbox::task::getWorkLoopFactory()->getWorkLoop("urn:xdaq-workloop:GEMTestBeamSupervisor:ThresholdScan","waiting");
@@ -93,11 +93,10 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
   wl_semaphore_.take(); //teake workloop
   if (!is_running_) {
     wl_semaphore_.give(); // give work loop if it is not running
-    //++confParams_.bag.triggercount;
     uint32_t bufferDepth = 0;
     bufferDepth = glibDevice_->getFIFOVFATBlockOccupancy(readout_mask);
-
-    wl_->submit(readSig_);
+    dumpRoutinesData(readout_mask, latency_, scanParams_.bag.deviceVT1, scanParams_.bag.deviceVT2 );
+    wl_->submit(SelectSig_);
 
     LOG4CPLUS_INFO(getApplicationLogger()," ******IT IS NOT RUNNIG ***** ");
     return false;
@@ -122,50 +121,41 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
     // Get the size of GLIB data buffer       
     uint32_t bufferDepth;
     bufferDepth  = glibDevice_->getFIFOOccupancy(readout_mask); 
-    
 
     hw_semaphore_.give();
     
     if (bufferDepth > 0) {
-      hw_semaphore_.take(); // take hw to set buffer depth
-      
-      LOG4CPLUS_INFO(getApplicationLogger()," BEFORE READ" );
-      
-      hw_semaphore_.give(); // give hw to set buffer depth
-      wl_semaphore_.give();//give workloop to read
+      wl_semaphore_.give();//give workloop to read      
 
       ++confParams_.bag.triggercount;
-      LOG4CPLUS_INFO(getApplicationLogger()," READSIGNATURE PER VFAT" );	
-      wl_->submit(readSig_);
-
-      wl_semaphore_.take(); 
+      dumpRoutinesData(readout_mask, latency_, scanParams_.bag.deviceVT1, scanParams_.bag.deviceVT2 );
+      wl_->submit(SelectSig_);
       
-      LOG4CPLUS_INFO(getApplicationLogger()," AFTER READ" );
+      wl_semaphore_.take(); 
     }  
-
-      wl_semaphore_.give();//give workloop to read
+    
+    wl_semaphore_.give();
     return true;
   }//end if triggerSeen < nTrigger
   else {
     
     hw_semaphore_.take(); //take hw to set Runmode 0 on VFATs 
  
-   for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
+    for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
       (*chip)->setRunMode(0);
     }// end for  
 
     uint32_t bufferDepth = 0;
     bufferDepth = glibDevice_->getFIFOVFATBlockOccupancy(readout_mask);
 
-    LOG4CPLUS_INFO(getApplicationLogger()," bufferdepth triggerSeen >= Ntrigger " << bufferDepth );
+    hw_semaphore_.give(); //give hw to set Runmode 0 on VFATs       
+    wl_semaphore_.give(); //give workloop to read
 
-    //    if (bufferDepth>0) {
-      hw_semaphore_.give(); //give hw to set Runmode 0 on VFATs       
-      wl_semaphore_.give(); //give workloop to read
-
+    if (bufferDepth>0) {
       ++confParams_.bag.triggercount;
-      wl_->submit(readSig_);
-      //       }
+      dumpRoutinesData(readout_mask, latency_, scanParams_.bag.deviceVT1, scanParams_.bag.deviceVT2 );
+      wl_->submit(SelectSig_);
+    }
 
     hw_semaphore_.take();// take hw to reset counters
     wl_semaphore_.take();// take workloop after reading
@@ -205,16 +195,40 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
       //if VT1 > stepSize      
       if (scanParams_.bag.deviceVT1 > scanParams_.bag.stepSize) {
 
+        // do this with an OH broadcast write
+	//        optohybridDevice_->broadcastWrite("VT1", 0x0,scanParams_.bag.deviceVT1 - scanParams_.bag.stepSize );
+	double que = gemDataParker->queueDepth();
+	int n =1;
+	while(que != 7*n){
+	  wl_->submit(SelectSig_);//wait for written
+	  INFO(" queueDepth  LATENCY" <<  que );    
+	  ++n;
+	}
+
 	for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
 	  (*chip)->setVThreshold1(scanParams_.bag.deviceVT1 - scanParams_.bag.stepSize);
 	}
       } else { //end if VT1 > stepsize, begin else
-
+	
 	for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
 	  (*chip)->setVThreshold1(0);
 	}
       }// end else VT1 <stepsize
-      
+
+      wl_->submit(SelectSig_);//wait for written        
+    
+      // flush FIFO, how to disable a specific, misbehaving, chip
+      INFO("Flushing the FIFOs, readout_mask 0x" <<std::hex << (int)readout_mask << std::dec);
+      DEBUG("Flushing FIFO" << readout_mask << " (depth " << glibDevice_->getFIFOOccupancy(readout_mask));
+      glibDevice_->flushFIFO(readout_mask);
+      while (glibDevice_->hasTrackingData(readout_mask)) {
+	glibDevice_->flushFIFO(readout_mask);
+	std::vector<uint32_t> dumping = glibDevice_->getTrackingData(readout_mask,
+								     glibDevice_->getFIFOVFATBlockOccupancy(readout_mask));
+      }
+      // once more for luck
+      glibDevice_->flushFIFO(readout_mask);
+
       for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
 	scanParams_.bag.deviceVT1    = (*chip)->getVThreshold1();
 	scanParams_.bag.deviceVT2    = (*chip)->getVThreshold2();
@@ -245,29 +259,34 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
   return false; 
 }//end run
 
-bool gem::supervisor::tbutils::ThresholdScan::readFIFO(toolbox::task::WorkLoop* wl)    
+bool gem::supervisor::tbutils::ThresholdScan::selectAction(toolbox::task::WorkLoop* wl)    
 {
 
   wl_semaphore_.take();
   hw_semaphore_.take();//glib getFIFO
 
-  LOG4CPLUS_INFO(getApplicationLogger(), " Latency " << (int)latency_ 
-		 << " TrigSeen " << confParams_.bag.triggersSeen 
-		 << "TriggersGLIB " << confParams_.bag.triggersSeenGLIB
-		 << " VT1 " << scanParams_.bag.deviceVT1 
-		 << " VT2 " << scanParams_.bag.deviceVT2
-		 ); 
+  uint32_t* pDQ = gemDataParker->selectData(m_counter);
+  if (pDQ) {
+    m_counter[0] = *(pDQ+0); // VFAT blocks dumped to disk
+    m_counter[1] = *(pDQ+1); // Events counter
+    m_counter[2] = *(pDQ+2); // VFATs counter, number of VFATS chips in the last event
+    m_counter[3] = *(pDQ+3); // good VFAT blocks dumped to file  
+    m_counter[4] = *(pDQ+4); // bad VFAT blocks dumped to error file 
+    //m_counter[5] = *(pDQ+5); //out of range?
+  }
 
-  uint8_t latency_m = latency_;
-  uint8_t vt1 = scanParams_.bag.deviceVT1;
-  uint8_t vt2 = scanParams_.bag.deviceVT2;
+  INFO(" queueDepth  GEMT" << gemDataParker->queueDepth()  );
   
-  dumpRoutinesData(readout_mask, latency_m, vt1, vt2 );
-
   hw_semaphore_.give();
   wl_semaphore_.give();
-
-  return false;
+  
+  if (is_running_){ 
+    return true;
+  }else if (gemDataParker->queueDepth() > 0){
+    return true;
+  }else{ 
+    return false;
+  }
 }
 
 void gem::supervisor::tbutils::ThresholdScan::scanParameters(xgi::Output *out)
@@ -358,11 +377,11 @@ void gem::supervisor::tbutils::ThresholdScan::webDefault(xgi::Input *in, xgi::Ou
     }
     else if (is_working_) {
       cgicc::HTTPResponseHeader &head = out->getHTTPResponseHeader();
-      head.addHeader("Refresh","60");
+      head.addHeader("Refresh","2");
     }
     else if (is_running_) {
       cgicc::HTTPResponseHeader &head = out->getHTTPResponseHeader();
-      head.addHeader("Refresh","20");
+      head.addHeader("Refresh","5");
     }
     
     //generate the control buttons and display the ones that can be touched depending on the run mode
@@ -432,7 +451,7 @@ void gem::supervisor::tbutils::ThresholdScan::webDefault(xgi::Input *in, xgi::Ou
 	.set("value", "Start") << std::endl;
       *out << cgicc::form()    << std::endl;
     }
-    
+   
     else if (is_running_) {
       *out << cgicc::form().set("method","POST").set("action", "/" + getApplicationDescriptor()->getURN() + "/Stop") << std::endl;
       
@@ -496,7 +515,7 @@ void gem::supervisor::tbutils::ThresholdScan::webDefault(xgi::Input *in, xgi::Ou
     *out << "</div>" << std::endl;
 
     *out << "<div class=\"xdaq-tab\" title=\"Fast Commands/Trigger Setup\">"  << std::endl;
-//open fast commands
+    //open fast commands
     if (is_initialized_)
       fastCommandLayout(out);
     *out << "</div>" << std::endl; //close fastcommands
@@ -735,11 +754,11 @@ void gem::supervisor::tbutils::ThresholdScan::configureAction(toolbox::Event::Re
     std::vector<uint32_t> dumping = glibDevice_->getTrackingData(readout_mask,
 								 glibDevice_->getFIFOVFATBlockOccupancy(readout_mask));
   }
-    // once more for luck
+  // once more for luck
   glibDevice_->flushFIFO(readout_mask);
 
 
-    //reset counters
+  //reset counters
   optohybridDevice_->resetL1ACount(0x5);
   optohybridDevice_->resetResyncCount();
   optohybridDevice_->resetBC0Count();

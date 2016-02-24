@@ -112,7 +112,7 @@ gem::supervisor::tbutils::GEMTBUtil::GEMTBUtil(xdaq::ApplicationStub * s)
   haltSig_ (0),
   resetSig_(0),
   //  runSig_  (0),
-  readSig_ (0),
+  SelectSig_ (0),
   readout_mask(0x0),
   is_working_     (false),
   is_initialized_ (false),
@@ -1545,9 +1545,6 @@ void gem::supervisor::tbutils::GEMTBUtil::selectMultipleVFAT(xgi::Output *out)
 	//  }// end if 
 	
      }//end else
-
-
-
     }// end if nChips
     
     *out << cgicc::tr()    << std::endl;
@@ -1616,44 +1613,18 @@ catch (const xgi::exception::Exception& e) {
 
 void gem::supervisor::tbutils::GEMTBUtil::dumpRoutinesData(uint8_t const& readout_mask,  uint8_t  currentLatency_m, uint8_t VT1, uint8_t VT2)
 {
-
-  INFO(" GEMTBUtitls INSIDE DUMPROUTINES ");
-  //    int latency_m, VT1_m, VT2_m;
-
-  for(int j = 0; j < 5; j++) {
-    INFO(" before GEMTBUtils counter " << j <<  " "<< m_counter[j] );
-  }
-
-  uint32_t* pDQ = gemDataParker->selectData(m_counter);
-  if (pDQ) {
-    m_counter[0] = *(pDQ+0); // VFAT blocks dumped to disk
-    m_counter[1] = *(pDQ+1); // Events counter
-    m_counter[2] = *(pDQ+2); // VFATs counter, number of VFATS chips in the last event
-    m_counter[3] = *(pDQ+3); // good VFAT blocks dumped to file  
-    m_counter[4] = *(pDQ+4); // bad VFAT blocks dumped to error file 
-    //m_counter[5] = *(pDQ+5); //out of range?
-  }
-
-  for(int j = 0; j < 5; j++){
-    INFO("GEMTBUtils counter " << j <<  " " << m_counter[j] );
+  
+  gemDataParker->ScanRoutines(currentLatency_m, VT1,VT2);
+  uint32_t* pDupm = gemDataParker->dumpData(readout_mask);
+  if(pDupm) {
+    INFO( " Latency = " << (int)currentLatency_m << " VT1 = " << (int)VT1 << " VT2 = " << (int)VT2);
   }
   
-  INFO(" GEMTBUtils ntriggers "     <<   confParams_.bag.triggersSeen );
-  INFO(" GEMTBUtils ntotalcounter " <<   confParams_.bag.triggercount );
-
-  bool finish = true;  
-  INFO(" queueDepth " <<  gemDataParker->queueDepth()  );
-  if(finish){
-    INFO("DUMP DATA");
-    gemDataParker->ScanRoutines(currentLatency_m, VT1,VT2);
-    uint32_t* pDupm = gemDataParker->dumpData(readout_mask);
-    if(pDupm) {
-      INFO( " Latency = " << (int)currentLatency_m << " VT1 = " << (int)VT1 << " VT2 = " << (int)VT2);
-    }
-  }else{
-    INFO("------NOT DUMP DATA---------");
-  }
+  double que = gemDataParker->queueDepth();
+  INFO(" queueDepth  GEMT" <<  que );
+  
 }
+
 
 
 

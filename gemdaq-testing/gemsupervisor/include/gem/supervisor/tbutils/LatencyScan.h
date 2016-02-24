@@ -31,7 +31,7 @@ namespace gem {
 
 	//workloop functions
 	bool run(       toolbox::task::WorkLoop* wl);
-	bool readFIFO(  toolbox::task::WorkLoop* wl);
+	bool selectAction(  toolbox::task::WorkLoop* wl);
 
 	// State transitions
 	void configureAction(toolbox::Event::Reference e)

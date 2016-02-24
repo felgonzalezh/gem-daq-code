@@ -139,7 +139,7 @@ namespace gem {
 	  virtual bool halt(      toolbox::task::WorkLoop* wl);
 	  virtual bool reset(     toolbox::task::WorkLoop* wl);
 	  virtual bool run(       toolbox::task::WorkLoop* wl)=0;
-	  virtual bool readFIFO(  toolbox::task::WorkLoop* wl)=0;
+	  virtual bool selectAction(  toolbox::task::WorkLoop* wl)=0;
 
 	  // State transitions
 	  virtual void initializeAction(toolbox::Event::Reference e)
@@ -242,7 +242,7 @@ namespace gem {
 	  toolbox::task::ActionSignature* haltSig_;
 	  toolbox::task::ActionSignature* resetSig_;
 	  toolbox::task::ActionSignature* runSig_;
-	  toolbox::task::ActionSignature* readSig_;
+	  toolbox::task::ActionSignature* SelectSig_;
 
 	  //ConfigParams confParams_;
 	  uint8_t readout_mask;
