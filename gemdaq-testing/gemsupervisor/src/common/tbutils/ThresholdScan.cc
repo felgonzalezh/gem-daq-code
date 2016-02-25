@@ -197,13 +197,13 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
 
         // do this with an OH broadcast write
 	//        optohybridDevice_->broadcastWrite("VT1", 0x0,scanParams_.bag.deviceVT1 - scanParams_.bag.stepSize );
-	double que = gemDataParker->queueDepth();
-	int n =1;
+	/*double que = gemDataParker->queueDepth();
+	  int n =1;
 	while(que != 7*n){
 	  wl_->submit(SelectSig_);//wait for written
 	  INFO(" queueDepth  LATENCY" <<  que );    
 	  ++n;
-	}
+	  }*/
 
 	for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
 	  (*chip)->setVThreshold1(scanParams_.bag.deviceVT1 - scanParams_.bag.stepSize);

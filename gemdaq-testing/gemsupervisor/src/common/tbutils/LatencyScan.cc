@@ -107,10 +107,10 @@ bool gem::supervisor::tbutils::LatencyScan::run(toolbox::task::WorkLoop* wl)
     uint32_t bufferDepth = 0;
     bufferDepth = glibDevice_->getFIFOVFATBlockOccupancy(readout_mask);
     /*
-    if (bufferDepth>0) {
+      if (bufferDepth>0) {
       dumpRoutinesData(readout_mask, currentLatency_, scanParams_.bag.deviceVT1, scanParams_.bag.deviceVT2 );
       wl_->submit(SelectSig_);
-    }
+      }
     */
     LOG4CPLUS_INFO(getApplicationLogger()," ******IT IS NOT RUNNIG ***** ");
     return false;
@@ -152,19 +152,21 @@ bool gem::supervisor::tbutils::LatencyScan::run(toolbox::task::WorkLoop* wl)
     bufferDepth = glibDevice_->getFIFOVFATBlockOccupancy(readout_mask);
 
     hw_semaphore_.give();//give hw. glib buffer depth 
-    wl_semaphore_.give();//give workloop to read
+    //    wl_semaphore_.give();//give workloop to read
 
     if (bufferDepth>0) {
+      wl_semaphore_.give(); //give workloop to read
+
       ++confParams_.bag.triggercount;
-
       INFO(" DUMP VALUES "<< "LATENCY = " << (int)currentLatency_ << "VT1" << (int)scanParams_.bag.deviceVT1 << " VT2 "  <<  (int)scanParams_.bag.deviceVT2);
-
       dumpRoutinesData(readout_mask, currentLatency_, scanParams_.bag.deviceVT1, scanParams_.bag.deviceVT2 );//dumpdata to disk
       wl_->submit(SelectSig_);//wait for written
     }
+  
     return true;
   }// end triggerSeen < N triggers
   else { 
+
     hw_semaphore_.take(); //take hw to set Runmode 0 on VFATs 
     for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
       (*chip)->setRunMode(0);
@@ -195,19 +197,18 @@ bool gem::supervisor::tbutils::LatencyScan::run(toolbox::task::WorkLoop* wl)
     optohybridDevice_->sendResync();     
     optohybridDevice_->sendBC0();          
     
-    hw_semaphore_.give(); // give hw to reset counters
-
-    INFO(" Scan point TiggersSeen " << confParams_.bag.triggersSeen );
-
     double que = gemDataParker->queueDepth();
-    
+    /*
     int n =1;
     while(que != 7*n){
       wl_->submit(SelectSig_);//wait for written
       INFO(" queueDepth  LATENCY" <<  que );    
       ++n;
     }
-    
+    */
+    hw_semaphore_.give(); // give hw to reset counters
+    INFO(" Scan point TiggersSeen " << confParams_.bag.triggersSeen );
+
     //if max Latency - current Latency >= stepsize
     if (scanParams_.bag.maxLatency - currentLatency_ >= scanParams_.bag.stepSize) {
       hw_semaphore_.take();// vfat set latency
@@ -217,11 +218,10 @@ bool gem::supervisor::tbutils::LatencyScan::run(toolbox::task::WorkLoop* wl)
         // do this with an OH broadcast write
         optohybridDevice_->broadcastWrite("Latency", 0x0, currentLatency_ + scanParams_.bag.stepSize);
       } else  { 
-
         optohybridDevice_->broadcastWrite("Latency", 0x0, 0xFF);
       }//end else
 
-      wl_->submit(SelectSig_);//wait for written
+      wl_->submit(SelectSig_);//wait for written  
 
       // flush FIFO, how to disable a specific, misbehaving, chip
       INFO("Flushing the FIFOs, readout_mask 0x" <<std::hex << (int)readout_mask << std::dec);
@@ -293,7 +293,7 @@ bool gem::supervisor::tbutils::LatencyScan::selectAction(toolbox::task::WorkLoop
     m_counter[3] = *(pDQ+3); // good VFAT blocks dumped to file  
     m_counter[4] = *(pDQ+4); // bad VFAT blocks dumped to error file 
     //m_counter[5] = *(pDQ+5); //out of range?
-    }
+  }
 
   INFO(" queueDepth  GEMT" << gemDataParker->queueDepth()  );
   
@@ -443,7 +443,7 @@ void gem::supervisor::tbutils::LatencyScan::webDefault(xgi::Input *in, xgi::Outp
 	.set("value", "Initialize") << std::endl;
 
       *out << cgicc::form() << std::endl;
-     }
+    }
 
     else if (!is_configured_) {
       //this will allow the parameters to be set to the chip and scan routine and the trigger source
