@@ -1,5 +1,4 @@
-#include "gem/supervisor/tbutils/ThresholdScan.h"
-#include "gem/supervisor/tbutils/ThresholdEvent.h"
+#include "gem/supervisor/tbutils/HVscan.h"
 
 #include "gem/hw/vfat/HwVFAT2.h"
 #include "gem/hw/glib/HwGLIB.h"
@@ -43,20 +42,20 @@
 
 #include "gem/hw/glib/GLIBManager.h"
 
-XDAQ_INSTANTIATOR_IMPL(gem::supervisor::tbutils::ThresholdScan)
+XDAQ_INSTANTIATOR_IMPL(gem::supervisor::tbutils::HVscan)
 
-void gem::supervisor::tbutils::ThresholdScan::ConfigParams::registerFields(xdata::Bag<ConfigParams> *bag)
+void gem::supervisor::tbutils::HVscan::ConfigParams::registerFields(xdata::Bag<ConfigParams> *bag)
 {
-  latency   = 12U;
-  minThresh = -80;
-  maxThresh = 20;
-  stepSize  = 5U;
+  latency   =  12U;
+  minHV     =    0;
+  maxHV     =  100;
+  stepSize  =  10U;
 
   deviceVT1 = 0x0;
   deviceVT2 = 0x0;
 
-  bag->addField("minThresh", &minThresh);
-  bag->addField("maxThresh", &maxThresh);
+  bag->addField("minHV", &minHV);
+  bag->addField("maxHV", &maxHV);
   bag->addField("stepSize",  &stepSize );
   bag->addField("deviceVT1", &deviceVT1);
   bag->addField("deviceVT2", &deviceVT2);
@@ -64,7 +63,7 @@ void gem::supervisor::tbutils::ThresholdScan::ConfigParams::registerFields(xdata
 }
 
 
-gem::supervisor::tbutils::ThresholdScan::ThresholdScan(xdaq::ApplicationStub * s) throw (xdaq::exception::Exception) :
+gem::supervisor::tbutils::HVscan::HVscan(xdaq::ApplicationStub * s) throw (xdaq::exception::Exception) :
   gem::supervisor::tbutils::GEMTBUtil(s)
 {
 
@@ -72,20 +71,20 @@ gem::supervisor::tbutils::ThresholdScan::ThresholdScan(xdaq::ApplicationStub * s
   getApplicationInfoSpace()->fireItemValueRetrieve("scanParams", &scanParams_);
 
   // HyperDAQ bindings
-  xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::ThresholdScan::webDefault,      "Default"    );
-  xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::ThresholdScan::webConfigure,    "Configure"  );
-  xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::ThresholdScan::webStart,        "Start"      );
-  runSig_   = toolbox::task::bind(this, &ThresholdScan::run,        "run"       );
+  xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::HVscan::webDefault,      "Default"    );
+  xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::HVscan::webConfigure,    "Configure"  );
+  xgi::framework::deferredbind(this, this, &gem::supervisor::tbutils::HVscan::webStart,        "Start"      );
+  runSig_   = toolbox::task::bind(this, &HVscan::run,        "run"       );
 
   // Initiate and activate main workloop  
-  wl_ = toolbox::task::getWorkLoopFactory()->getWorkLoop("urn:xdaq-workloop:GEMTestBeamSupervisor:ThresholdScan","waiting");
+  wl_ = toolbox::task::getWorkLoopFactory()->getWorkLoop("urn:xdaq-workloop:GEMTestBeamSupervisor:HVscan","waiting");
   wl_->activate();
 
 }
 
-gem::supervisor::tbutils::ThresholdScan::~ThresholdScan()
+gem::supervisor::tbutils::HVscan::~HVscan()
 {
-  wl_ = toolbox::task::getWorkLoopFactory()->getWorkLoop("urn:xdaq-workloop:GEMTestBeamSupervisor:ThresholdScan","waiting");
+  wl_ = toolbox::task::getWorkLoopFactory()->getWorkLoop("urn:xdaq-workloop:GEMTestBeamSupervisor:HVscan","waiting");
   //should we check to see if it's running and try to stop?
   wl_->cancel();
   wl_ = 0;
@@ -93,7 +92,7 @@ gem::supervisor::tbutils::ThresholdScan::~ThresholdScan()
 }
 
 // State transitions
-bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
+bool gem::supervisor::tbutils::HVscan::run(toolbox::task::WorkLoop* wl)
 {
   wl_semaphore_.take(); //teake workloop
   if (!is_running_) {
@@ -104,33 +103,13 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
     return false;
   }
 
-  LOG4CPLUS_INFO(getApplicationLogger(), " ABC Counter begin of run before start soap message" << optohybridDevice_->getL1ACount(0x0));
-
-  //gem::hw::amc13::AMC13Manager::sendTriggerBurst();
-  sendAMC13trigger();
-
-
-  LOG4CPLUS_INFO(getApplicationLogger(), "triggercounter before " << totaltriggers << "triggerseen before " << (int)confParams_.bag.triggersSeen);
-
-  //-------------------AMC13 Starting-------------
-  
-  if(totaltriggers == 0){
-    //send burst triggers
-  }
-  
   //send triggers
   hw_semaphore_.take(); //take hw to send the trigger 
 
-
-  LOG4CPLUS_INFO(getApplicationLogger(), " ABC Counter begin of run after start soap message" << optohybridDevice_->getL1ACount(0x0));
-  //count triggers
-
-  LOG4CPLUS_INFO(getApplicationLogger(), "triggercounter after " << totaltriggers);
+  sendAMC13trigger();
 
   optohybridDevice_->setTrigSource(0x0);// trigger sources   
   confParams_.bag.triggersSeen = optohybridDevice_->getL1ACount(0x0);
-  
-
 
   LOG4CPLUS_INFO(getApplicationLogger(), " ABC TriggersSeen " << confParams_.bag.triggersSeen);
 
@@ -146,10 +125,6 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
     bufferDepth  = glibDevice_->getFIFOOccupancy(readout_mask); 
 
     LOG4CPLUS_INFO(getApplicationLogger(), " Bufferdepht " << bufferDepth);    
-    ++totaltriggers;
-    //totaltriggers += (int)confParams_.bag.triggersSeen;
-
-    LOG4CPLUS_INFO(getApplicationLogger(), "triggercounter after after " << totaltriggers);
       
     hw_semaphore_.give(); // give hw to set buffer depth
     wl_semaphore_.give();//give workloop to read
@@ -164,9 +139,6 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
     
     uint32_t bufferDepth = 0;
     bufferDepth = glibDevice_->getFIFOVFATBlockOccupancy(readout_mask);
-    
-    ++totaltriggers;
-    //    totaltriggers += (int)confParams_.bag.triggersSeen;
         
     //reset counters
     optohybridDevice_->resetL1ACount(0x5);
@@ -182,78 +154,16 @@ bool gem::supervisor::tbutils::ThresholdScan::run(toolbox::task::WorkLoop* wl)
     //paused
     sleep(0.001);
     
-    if ( (unsigned)scanParams_.bag.deviceVT1 == (unsigned)0x0 ) {
-      wl_semaphore_.give();
-      wl_->submit(stopSig_);
-      return false;
-      
-    }//end if deviceVT1=0
-    else if ( (scanParams_.bag.deviceVT2-scanParams_.bag.deviceVT1) <= scanParams_.bag.maxThresh ) {    
-      //if VT2 - VT1 <= maxThreshold
-      
-      hw_semaphore_.take(); // take hw to set threshold values
-      
-      LOG4CPLUS_INFO(getApplicationLogger()," ABC run: VT1= " 
-		     << scanParams_.bag.deviceVT1 << " VT2-VT1= "
-		     << scanParams_.bag.deviceVT2-scanParams_.bag.deviceVT1 
-		     << " bag.maxThresh= " << scanParams_.bag.maxThresh 
-		     << " abs(VT2-VT1) " 
-		     << abs(scanParams_.bag.deviceVT2-scanParams_.bag.deviceVT1) );
-
-      //if VT1 > stepSize      
-      if (scanParams_.bag.deviceVT1 > scanParams_.bag.stepSize) {
-
-	for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
-	  (*chip)->setVThreshold1(scanParams_.bag.deviceVT1 - scanParams_.bag.stepSize);
-	}
-      } else { //end if VT1 > stepsize, begin else
-	for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
-	  (*chip)->setVThreshold1(0);
-	}
-      }// end else VT1 <stepsize
-
-      
-      uint32_t bufferDepth = 0;
-      bufferDepth = glibDevice_->getFIFOVFATBlockOccupancy(readout_mask);    
-      //      sleep(0.001);
-      
-      for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
-	scanParams_.bag.deviceVT1    = (*chip)->getVThreshold1();
-	scanParams_.bag.deviceVT2    = (*chip)->getVThreshold2();
-      }	
-
-      glibDevice_->setDAQLinkRunParameter(2,scanParams_.bag.deviceVT1);
-      glibDevice_->setDAQLinkRunParameter(3,scanParams_.bag.deviceVT2);
-
-      for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
-	(*chip)->setRunMode(1);
-      }
-      
-      confParams_.bag.triggersSeen = 0;
-
-      //send Resync
-      optohybridDevice_->sendResync();     
-      optohybridDevice_->sendBC0();          
-
-      hw_semaphore_.give(); // give hw to set threshold values
-      wl_semaphore_.give(); // emd of workloop	
-      return true;	
-    }//else if VT2-VT1 < maxthreshold 
-    else {
-      hw_semaphore_.take(); // take hw to stop workloop
-      wl_->submit(stopSig_);  
-      hw_semaphore_.give(); // give hw to stop workloop
-      wl_semaphore_.give(); // end of workloop	      
-      return true; 
-    }//end else
-    
-    //    return true;
-  }//end else triggerseen < N triggers
-  
+    hw_semaphore_.take(); // take hw to stop workloop
+    wl_->submit(stopSig_);  
+    hw_semaphore_.give(); // give hw to stop workloop
+    wl_semaphore_.give(); // end of workloop	      
+    return true; 
+  }//end else triggerseen < N triggers   
   return false; 
 }//end run
 
-void gem::supervisor::tbutils::ThresholdScan::scanParameters(xgi::Output *out)
+void gem::supervisor::tbutils::HVscan::scanParameters(xgi::Output *out)
   throw (xgi::exception::Exception)
 {
   try {
@@ -268,16 +178,16 @@ void gem::supervisor::tbutils::ThresholdScan::scanParameters(xgi::Output *out)
 	 << std::endl
 	 << cgicc::br() << std::endl
 
-	 << cgicc::label("MinThreshold").set("for","MinThreshold") << std::endl
-	 << cgicc::input().set("id","MinThreshold").set(is_running_?"readonly":"").set("name","MinThreshold")
+	 << cgicc::label("MinHV").set("for","MinHV") << std::endl
+	 << cgicc::input().set("id","MinHV").set(is_running_?"readonly":"").set("name","MinHV")
       .set("type","number").set("min","-255").set("max","255")
-      .set("value",boost::str(boost::format("%d")%(scanParams_.bag.minThresh)))
+      .set("value",boost::str(boost::format("%d")%(scanParams_.bag.minHV)))
 	 << std::endl
 
-	 << cgicc::label("MaxThreshold").set("for","MaxThreshold") << std::endl
-	 << cgicc::input().set("id","MaxThreshold").set(is_running_?"readonly":"").set("name","MaxThreshold")
+	 << cgicc::label("MaxHV").set("for","MaxHV") << std::endl
+	 << cgicc::input().set("id","MaxHV").set(is_running_?"readonly":"").set("name","MaxHV")
       .set("type","number").set("min","-255").set("max","255")
-      .set("value",boost::str(boost::format("%d")%(scanParams_.bag.maxThresh)))
+      .set("value",boost::str(boost::format("%d")%(scanParams_.bag.maxHV)))
 	 << std::endl
 	 << cgicc::br() << std::endl
 
@@ -331,10 +241,10 @@ void gem::supervisor::tbutils::ThresholdScan::scanParameters(xgi::Output *out)
 }
 
 // HyperDAQ interface
-void gem::supervisor::tbutils::ThresholdScan::webDefault(xgi::Input *in, xgi::Output *out)
+void gem::supervisor::tbutils::HVscan::webDefault(xgi::Input *in, xgi::Output *out)
   throw (xgi::exception::Exception)
 {
-  //LOG4CPLUS_INFO(this->getApplicationLogger(),"gem::supervisor::tbutils::ThresholdScan::webDefaul");
+  //LOG4CPLUS_INFO(this->getApplicationLogger(),"gem::supervisor::tbutils::HVscan::webDefaul");
   try {
     ////update the page refresh 
     if (!is_working_ && !is_running_) {
@@ -561,17 +471,17 @@ void gem::supervisor::tbutils::ThresholdScan::webDefault(xgi::Input *in, xgi::Ou
 
   }// end try
   catch (const xgi::exception::Exception& e) {
-    LOG4CPLUS_INFO(this->getApplicationLogger(),"Something went wrong displaying ThresholdScan control panel(xgi): " << e.what());
+    LOG4CPLUS_INFO(this->getApplicationLogger(),"Something went wrong displaying HVscan control panel(xgi): " << e.what());
     XCEPT_RAISE(xgi::exception::Exception, e.what());
   }
   catch (const std::exception& e) {
-    LOG4CPLUS_INFO(this->getApplicationLogger(),"Something went wrong displaying ThresholdScan control panel(std): " << e.what());
+    LOG4CPLUS_INFO(this->getApplicationLogger(),"Something went wrong displaying HVscan control panel(std): " << e.what());
     XCEPT_RAISE(xgi::exception::Exception, e.what());
   }
 }
 
 
-void gem::supervisor::tbutils::ThresholdScan::webConfigure(xgi::Input *in, xgi::Output *out)
+void gem::supervisor::tbutils::HVscan::webConfigure(xgi::Input *in, xgi::Output *out)
   throw (xgi::exception::Exception) {
 
   try {
@@ -587,13 +497,13 @@ void gem::supervisor::tbutils::ThresholdScan::webConfigure(xgi::Input *in, xgi::
     if (element != cgi.getElements().end())
       scanParams_.bag.latency   = element->getIntegerValue();
 
-    element = cgi.getElement("MinThreshold");
+    element = cgi.getElement("MinHV");
     if (element != cgi.getElements().end())
-      scanParams_.bag.minThresh = element->getIntegerValue();
+      scanParams_.bag.minHV = element->getIntegerValue();
     
-    element = cgi.getElement("MaxThreshold");
+    element = cgi.getElement("MaxHV");
     if (element != cgi.getElements().end())
-      scanParams_.bag.maxThresh = element->getIntegerValue();
+      scanParams_.bag.maxHV = element->getIntegerValue();
 
     element = cgi.getElement("VStep");
     if (element != cgi.getElements().end())
@@ -616,7 +526,7 @@ void gem::supervisor::tbutils::ThresholdScan::webConfigure(xgi::Input *in, xgi::
 }
 
 
-void gem::supervisor::tbutils::ThresholdScan::webStart(xgi::Input *in, xgi::Output *out)
+void gem::supervisor::tbutils::HVscan::webStart(xgi::Input *in, xgi::Output *out)
   throw (xgi::exception::Exception) {
 
   try {
@@ -626,13 +536,13 @@ void gem::supervisor::tbutils::ThresholdScan::webStart(xgi::Input *in, xgi::Outp
     if (element != cgi.getElements().end())
       scanParams_.bag.latency   = element->getIntegerValue();
 
-    element = cgi.getElement("MinThreshold");
+    element = cgi.getElement("MinHV");
     if (element != cgi.getElements().end())
-      scanParams_.bag.minThresh = element->getIntegerValue();
+      scanParams_.bag.minHV = element->getIntegerValue();
     
-    element = cgi.getElement("MaxThreshold");
+    element = cgi.getElement("MaxHV");
     if (element != cgi.getElements().end())
-      scanParams_.bag.maxThresh = element->getIntegerValue();
+      scanParams_.bag.maxHV = element->getIntegerValue();
 
     element = cgi.getElement("VStep");
     if (element != cgi.getElements().end())
@@ -655,7 +565,7 @@ void gem::supervisor::tbutils::ThresholdScan::webStart(xgi::Input *in, xgi::Outp
 }
 
 // State transitions
-void gem::supervisor::tbutils::ThresholdScan::configureAction(toolbox::Event::Reference e)
+void gem::supervisor::tbutils::HVscan::configureAction(toolbox::Event::Reference e)
   throw (toolbox::fsm::exception::Exception) {
 
   is_working_ = true;
@@ -665,8 +575,8 @@ void gem::supervisor::tbutils::ThresholdScan::configureAction(toolbox::Event::Re
   latency_   = scanParams_.bag.latency;
   nTriggers_ = confParams_.bag.nTriggers;
   stepSize_  = scanParams_.bag.stepSize;
-  minThresh_ = scanParams_.bag.minThresh;
-  maxThresh_ = scanParams_.bag.maxThresh;
+  minHV_ = scanParams_.bag.minHV;
+  maxHV_ = scanParams_.bag.maxHV;
 
   NTriggersAMC13();
   sendConfigureMessageAMC13();
@@ -709,13 +619,11 @@ void gem::supervisor::tbutils::ThresholdScan::configureAction(toolbox::Event::Re
     (*chip)->setIComp(      120);
 
     (*chip)->setLatency(latency_);
-    //}
-  
-    (*chip)->setVThreshold1(maxThresh_-minThresh_);
-    (*chip)->setVThreshold2(std::max(0,maxThresh_));
+    (*chip)->setVThreshold1(VT1_);
+    (*chip)->setVThreshold2(VT2_);
+
     scanParams_.bag.deviceVT1 = (*chip)->getVThreshold1();
     scanParams_.bag.deviceVT2 = (*chip)->getVThreshold2();
-
     scanParams_.bag.latency = (*chip)->getLatency();
 
   }
@@ -750,34 +658,23 @@ void gem::supervisor::tbutils::ThresholdScan::configureAction(toolbox::Event::Re
 }
 
 
-void gem::supervisor::tbutils::ThresholdScan::startAction(toolbox::Event::Reference e)
+void gem::supervisor::tbutils::HVscan::startAction(toolbox::Event::Reference e)
   throw (toolbox::fsm::exception::Exception) {
   
   is_working_ = true;
   sendStartMessageGLIB();
   sendStartMessageAMC13();
-  //  gem::base::GEMFSMApplication* p_gemFSMApp_glib;
-  //  std::string state =  gem::hw::glib::GLIBManager->getCurrentState();
-  //  dynamic_cast<gem::hw::glib::GLIBManager*>(p_gemFSMApp)->getCurrentState();
-  //  std::string state = glibManager_->getCurrentState();  
   sleep(1);
 
-  //(gem::base::GEMFSMApplication* p_gemFSMApp)->getCurrentState();
-
-  //  std::string state = fsm_.getStateName(fsm_.getCurrentState());
-  //  std::string state =  dynamic_cast<gem::hw::amc13::AMC13Manager*>(p_gemFSMApp)->getCurrentState());
-
-//gem::hw::glib::GLIBManager::getCurrentState();
-//  INFO("GLIB Manager STATE : " << state );
-
-  
-  
-  //AppHeader ah;
+  //AppHeader set;
   latency_   = scanParams_.bag.latency;
+  VT1_   = scanParams_.bag.deviceVT1;
+  VT2_   = scanParams_.bag.deviceVT2;
+
   nTriggers_ = confParams_.bag.nTriggers;
   stepSize_  = scanParams_.bag.stepSize;
-  minThresh_ = scanParams_.bag.minThresh;
-  maxThresh_ = scanParams_.bag.maxThresh;
+  minHV_ = scanParams_.bag.minHV;
+  maxHV_ = scanParams_.bag.maxHV;
 
   //char data[128/8]
   is_running_ = true;
@@ -785,17 +682,6 @@ void gem::supervisor::tbutils::ThresholdScan::startAction(toolbox::Event::Refere
   
   //set trigger source
   optohybridDevice_->setTrigSource(0x0);// trigger sources   
-
-  for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
-    (*chip)->setVThreshold1(maxThresh_-minThresh_);
-    (*chip)->setVThreshold2(std::max(0,maxThresh_));
-    scanParams_.bag.deviceVT1 = (*chip)->getVThreshold1();
-    scanParams_.bag.deviceVT2 = (*chip)->getVThreshold2();
-    
-    scanParams_.bag.latency = (*chip)->getLatency();
-  }
-
-  //start readout
 
   //flush fifo
   INFO("Flushing the FIFOs, readout_mask 0x" <<std::hex << (int)readout_mask << std::dec);
@@ -808,7 +694,7 @@ void gem::supervisor::tbutils::ThresholdScan::startAction(toolbox::Event::Refere
   }
   // once more for luck
   glibDevice_->flushFIFO(readout_mask);
-
+  
   optohybridDevice_->sendResync();      
   optohybridDevice_->sendBC0();          
 
@@ -831,9 +717,7 @@ void gem::supervisor::tbutils::ThresholdScan::startAction(toolbox::Event::Refere
   optohybridDevice_->sendBC0();          
   optohybridDevice_->setTrigSource(0x1);// trigger sources   
 
-
   wl_->submit(runSig_);
-
 
   hw_semaphore_.give();
   //start scan routine
@@ -842,25 +726,25 @@ void gem::supervisor::tbutils::ThresholdScan::startAction(toolbox::Event::Refere
 }
 
 
-void gem::supervisor::tbutils::ThresholdScan::resetAction(toolbox::Event::Reference e)
+void gem::supervisor::tbutils::HVscan::resetAction(toolbox::Event::Reference e)
   throw (toolbox::fsm::exception::Exception) {
 
   is_working_ = true;
   gem::supervisor::tbutils::GEMTBUtil::resetAction(e);
   
-  scanParams_.bag.latency   = 12U;
-  scanParams_.bag.minThresh = -80;
-  scanParams_.bag.maxThresh = 20;
-  scanParams_.bag.stepSize  = 5U;
-  scanParams_.bag.deviceVT1 = 0x0;
-  scanParams_.bag.deviceVT2 = 0x0;
+  scanParams_.bag.latency   =  12U;
+  scanParams_.bag.minHV     =    0;
+  scanParams_.bag.maxHV     =  100;
+  scanParams_.bag.stepSize  =  10U;
+  scanParams_.bag.deviceVT1 =  0x0;
+  scanParams_.bag.deviceVT2 =  0x0;
   
   is_working_     = false;
 }
 
-//void gem::supervisor::tbutils::ThresholdScan::sendMessage(xgi::Input *in, xgi::Output *out)
+//void gem::supervisor::tbutils::HVscan::sendMessage(xgi::Input *in, xgi::Output *out)
 
-void gem::supervisor::tbutils::ThresholdScan::sendConfigureMessageGLIB()
+void gem::supervisor::tbutils::HVscan::sendConfigureMessageGLIB()
   throw (xgi::exception::Exception) {
   //  is_working_ = true;
 
@@ -888,7 +772,7 @@ void gem::supervisor::tbutils::ThresholdScan::sendConfigureMessageGLIB()
 }      
 
 
-bool gem::supervisor::tbutils::ThresholdScan::sendStartMessageGLIB()
+bool gem::supervisor::tbutils::HVscan::sendStartMessageGLIB()
   throw (xgi::exception::Exception) {
 
   //  this->Default(in,out);
@@ -919,7 +803,7 @@ bool gem::supervisor::tbutils::ThresholdScan::sendStartMessageGLIB()
     }
 }      
 
-void gem::supervisor::tbutils::ThresholdScan::NTriggersAMC13()
+void gem::supervisor::tbutils::HVscan::NTriggersAMC13()
   throw (xgi::exception::Exception) {
   //  is_working_ = true;
 
@@ -991,7 +875,7 @@ void gem::supervisor::tbutils::ThresholdScan::NTriggersAMC13()
 }      
 
 
-void gem::supervisor::tbutils::ThresholdScan::sendConfigureMessageAMC13()
+void gem::supervisor::tbutils::HVscan::sendConfigureMessageAMC13()
   throw (xgi::exception::Exception) {
   //  is_working_ = true;
 
@@ -1030,7 +914,7 @@ void gem::supervisor::tbutils::ThresholdScan::sendConfigureMessageAMC13()
 
 
 
-bool gem::supervisor::tbutils::ThresholdScan::sendStartMessageAMC13()
+bool gem::supervisor::tbutils::HVscan::sendStartMessageAMC13()
   throw (xgi::exception::Exception) {
   //  is_working_ = true;
   xoap::MessageReference msg = xoap::createMessage();
@@ -1062,7 +946,7 @@ bool gem::supervisor::tbutils::ThresholdScan::sendStartMessageAMC13()
   //  this->Default(in,out);
 }      
 
-void gem::supervisor::tbutils::ThresholdScan::sendAMC13trigger()
+void gem::supervisor::tbutils::HVscan::sendAMC13trigger()
   throw (xgi::exception::Exception) {
   //  is_working_ = true;
   xoap::MessageReference msg = xoap::createMessage();

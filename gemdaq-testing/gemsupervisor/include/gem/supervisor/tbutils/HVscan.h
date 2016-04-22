@@ -1,5 +1,5 @@
-#ifndef gem_supervisor_tbutils_ThresholdScan_h
-#define gem_supervisor_tbutils_ThresholdScan_h
+#ifndef gem_supervisor_tbutils_HVscan_h
+#define gem_supervisor_tbutils_HVscan_h
 
 #include "gem/supervisor/tbutils/GEMTBUtil.h"
 
@@ -9,7 +9,7 @@ namespace gem {
   namespace supervisor {
     namespace tbutils {
 
-      class ThresholdScan : public GEMTBUtil
+      class HVscan : public GEMTBUtil
       {
 	  
         //	  friend class GEMTBUtil;
@@ -17,9 +17,9 @@ namespace gem {
       public:
 	  
         XDAQ_INSTANTIATOR();
-        ThresholdScan(xdaq::ApplicationStub * s)
+        HVscan(xdaq::ApplicationStub * s)
           throw (xdaq::exception::Exception);
-        ~ThresholdScan();
+        ~HVscan();
 
 	//SOAP MEssage AMC13	
 	void sendConfigureMessageAMC13()
@@ -36,8 +36,6 @@ namespace gem {
 	  throw (xgi::exception::Exception);
 	bool sendStartMessageGLIB()
 	  throw (xgi::exception::Exception);
-
-
 
         // HyperDAQ interface
         void webDefault(xgi::Input *in, xgi::Output *out)
@@ -73,8 +71,8 @@ namespace gem {
           xdata::UnsignedInteger latency;
           xdata::UnsignedShort   stepSize;
 
-          xdata::Integer minThresh;
-          xdata::Integer maxThresh;
+          xdata::Integer minHV;
+          xdata::Integer maxHV;
 	    
           xdata::UnsignedShort currentHisto;
           xdata::UnsignedShort deviceVT1;
@@ -87,8 +85,8 @@ namespace gem {
         //ConfigParams confParams_;
         xdata::Bag<ConfigParams> scanParams_;
 	int totaltriggers;
-        int minThresh_, maxThresh_;
-        uint64_t stepSize_, latency_;
+        int minHV_, maxHV_;
+        uint64_t stepSize_, latency_, VT1_,VT2_;
 	  
       protected:
 	  
