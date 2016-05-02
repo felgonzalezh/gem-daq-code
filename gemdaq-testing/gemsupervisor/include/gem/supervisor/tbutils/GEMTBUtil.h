@@ -229,6 +229,8 @@ namespace gem {
 	    xdata::UnsignedShort deviceVT2;
 	    xdata::UnsignedShort triggerSource_;
 
+	    xdata::String        chamber;
+
 	  };
 	  
 	protected:
@@ -298,6 +300,9 @@ namespace gem {
 	  uint32_t counter_[5];
 	  //	  int latency_m, VT1_m, VT2_m;
 	  uint32_t m_counter[5]; 
+
+
+
 
 	protected:
 

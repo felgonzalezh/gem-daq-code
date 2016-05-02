@@ -91,6 +91,12 @@
       </properties>
     </xc:Application>
 
+    <xc:Application class="gem::supervisor::tbutils::HVscan" id="253" instance="0" network="local">
+      <properties xmlns="urn:xdaq-application:HVscan" xsi:type="soapenc:Struct">
+	<ipAddr xsi:type="xsd:string">192.168.0.168</ipAddr>
+      </properties>
+    </xc:Application>
+
 
     
     <xc:Module>${BUILD_HOME}/gemdaq-testing/gembase/lib/${XDAQ_OS}/${XDAQ_PLATFORM}/libgem_base.so</xc:Module>

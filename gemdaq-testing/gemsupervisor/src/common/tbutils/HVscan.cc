@@ -46,19 +46,13 @@ XDAQ_INSTANTIATOR_IMPL(gem::supervisor::tbutils::HVscan)
 
 void gem::supervisor::tbutils::HVscan::ConfigParams::registerFields(xdata::Bag<ConfigParams> *bag)
 {
-  latency   =  12U;
   minHV     =    0;
   maxHV     =  100;
   stepSize  =  10U;
 
-  deviceVT1 = 0x0;
-  deviceVT2 = 0x0;
-
   bag->addField("minHV", &minHV);
   bag->addField("maxHV", &maxHV);
   bag->addField("stepSize",  &stepSize );
-  bag->addField("deviceVT1", &deviceVT1);
-  bag->addField("deviceVT2", &deviceVT2);
 
 }
 
@@ -136,6 +130,11 @@ bool gem::supervisor::tbutils::HVscan::run(toolbox::task::WorkLoop* wl)
     for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
       (*chip)->setRunMode(0);
     }// end for  
+
+
+
+
+
     
     uint32_t bufferDepth = 0;
     bufferDepth = glibDevice_->getFIFOVFATBlockOccupancy(readout_mask);
@@ -171,12 +170,6 @@ void gem::supervisor::tbutils::HVscan::scanParameters(xgi::Output *out)
     if (is_running_ || is_configured_)
       isReadonly = "readonly";
     *out << cgicc::span()   << std::endl
-	 << cgicc::label("Latency").set("for","Latency") << std::endl
-	 << cgicc::input().set("id","Latency").set(is_running_?"readonly":"").set("name","Latency")
-      .set("type","number").set("min","0").set("max","255")
-      .set("value",boost::str(boost::format("%d")%static_cast<unsigned>(scanParams_.bag.latency)))
-	 << std::endl
-	 << cgicc::br() << std::endl
 
 	 << cgicc::label("MinHV").set("for","MinHV") << std::endl
 	 << cgicc::input().set("id","MinHV").set(is_running_?"readonly":"").set("name","MinHV")
@@ -198,17 +191,6 @@ void gem::supervisor::tbutils::HVscan::scanParameters(xgi::Output *out)
 	 << std::endl
 	 << cgicc::br() << std::endl
 
-	 << cgicc::label("VT1").set("for","VT1") << std::endl
-	 << cgicc::input().set("id","VT1").set("name","VT1").set("readonly")
-      .set("value",boost::str(boost::format("%d")%static_cast<unsigned>(scanParams_.bag.deviceVT1)))
-	 << std::endl
-
-	 << cgicc::label("VT2").set("for","VT2") << std::endl
-	 << cgicc::input().set("id","VT2").set("name","VT2").set("readonly")
-      .set("value",boost::str(boost::format("%d")%static_cast<unsigned>(scanParams_.bag.deviceVT2)))
-	 << std::endl
-	 << cgicc::br() << std::endl
-
 	 << cgicc::label("NTrigsStep").set("for","NTrigsStep") << std::endl
 	 << cgicc::input().set("id","NTrigsStep").set(is_running_?"readonly":"").set("name","NTrigsStep")
       .set("type","number").set("min","0")
@@ -218,15 +200,6 @@ void gem::supervisor::tbutils::HVscan::scanParameters(xgi::Output *out)
 	 << cgicc::input().set("id","NTrigsSeen").set("name","NTrigsSeen")
       .set("type","number").set("min","0").set("readonly")
       .set("value",boost::str(boost::format("%d")%(confParams_.bag.triggersSeen)))
-	 << cgicc::br() << std::endl
-	 << cgicc::label("ADCVoltage").set("for","ADCVoltage") << std::endl
-	 << cgicc::input().set("id","ADCVoltage").set("name","ADCVoltage")
-      .set("type","number").set("min","0").set("readonly")
-      .set("value",boost::str(boost::format("%d")%(confParams_.bag.ADCVoltage)))
-	 << cgicc::label("ADCurrent").set("for","ADCurrent") << std::endl
-	 << cgicc::input().set("id","ADCurrent").set("name","ADCurrent")
-      .set("type","number").set("min","0").set("readonly")
-      .set("value",boost::str(boost::format("%d")%(confParams_.bag.ADCurrent)))
 	 << cgicc::br() << std::endl
 	 << cgicc::span()   << std::endl;
   }
@@ -278,8 +251,7 @@ void gem::supervisor::tbutils::HVscan::webDefault(xgi::Input *in, xgi::Output *o
       //have a menu for selecting the VFAT
       *out << cgicc::form().set("method","POST").set("action", "/" + getApplicationDescriptor()->getURN() + "/Initialize") << std::endl;
 
-      selectOptohybridDevice(out);
-      selectMultipleVFAT(out);
+      selectCHAMBER(out);
       scanParameters(out);
       
       *out << cgicc::input().set("type", "submit")
@@ -294,8 +266,7 @@ void gem::supervisor::tbutils::HVscan::webDefault(xgi::Input *in, xgi::Output *o
 
       *out << cgicc::form().set("method","POST").set("action", "/" + getApplicationDescriptor()->getURN() + "/Configure") << std::endl;
 
-      selectOptohybridDevice(out);
-      selectMultipleVFAT(out);
+      selectCHAMBER(out);
 
       scanParameters(out);
 
@@ -315,8 +286,7 @@ void gem::supervisor::tbutils::HVscan::webDefault(xgi::Input *in, xgi::Output *o
       //hardware is initialized and configured, we can start the run
       *out << cgicc::form().set("method","POST").set("action", "/" + getApplicationDescriptor()->getURN() + "/Start") << std::endl;
 
-      selectOptohybridDevice(out);
-      selectMultipleVFAT(out);      
+      selectCHAMBER(out);
 
       scanParameters(out);
       
@@ -329,9 +299,7 @@ void gem::supervisor::tbutils::HVscan::webDefault(xgi::Input *in, xgi::Output *o
     else if (is_running_) {
       *out << cgicc::form().set("method","POST").set("action", "/" + getApplicationDescriptor()->getURN() + "/Stop") << std::endl;
       
-      selectOptohybridDevice(out);
-      selectMultipleVFAT(out);
-
+      selectCHAMBER(out);
       scanParameters(out);
       
       *out << cgicc::input().set("type", "submit")
@@ -489,13 +457,48 @@ void gem::supervisor::tbutils::HVscan::webConfigure(xgi::Input *in, xgi::Output 
 
     //sending SOAP message
     //    sendMessage(in,out);
+
+    cgicc::form_iterator oh = cgi.getElement("SetChamber");
+    if (strcmp((**oh).c_str(),"CH1Top") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Top";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+    if (strcmp((**oh).c_str(),"CH1Bot") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Bottom";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+    if (strcmp((**oh).c_str(),"CH2Top") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Top";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+    if (strcmp((**oh).c_str(),"CH2Bot") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Bottom";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+    if (strcmp((**oh).c_str(),"CH3Top") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Top";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+    if (strcmp((**oh).c_str(),"CH3Bot") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Bottom";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+    if (strcmp((**oh).c_str(),"CH4Top") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Top";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+    if (strcmp((**oh).c_str(),"CH4Bot") == 0) {
+      confParams_.bag.chamber.toString()= "Chamber1Bottom";
+      INFO("OH_0 has been selected " << confParams_.bag.chamber.toString());
+    }//if Chamber1
+
     
     //aysen's xml parser
     confParams_.bag.settingsFile = cgi.getElement("xmlFilename")->getValue();
     
-    cgicc::const_form_iterator element = cgi.getElement("Latency");
+    cgicc::const_form_iterator element = cgi.getElement("HV");
     if (element != cgi.getElements().end())
-      scanParams_.bag.latency   = element->getIntegerValue();
+      scanParams_.bag.minHV   = element->getIntegerValue();
 
     element = cgi.getElement("MinHV");
     if (element != cgi.getElements().end())
@@ -532,9 +535,9 @@ void gem::supervisor::tbutils::HVscan::webStart(xgi::Input *in, xgi::Output *out
   try {
     cgicc::Cgicc cgi(in);
     
-    cgicc::const_form_iterator element = cgi.getElement("Latency");
+    cgicc::const_form_iterator element = cgi.getElement("HV");
     if (element != cgi.getElements().end())
-      scanParams_.bag.latency   = element->getIntegerValue();
+      scanParams_.bag.minHV   = element->getIntegerValue();
 
     element = cgi.getElement("MinHV");
     if (element != cgi.getElements().end())
@@ -572,7 +575,6 @@ void gem::supervisor::tbutils::HVscan::configureAction(toolbox::Event::Reference
 
   //--------------------AMC13 Configure --------------
 
-  latency_   = scanParams_.bag.latency;
   nTriggers_ = confParams_.bag.nTriggers;
   stepSize_  = scanParams_.bag.stepSize;
   minHV_ = scanParams_.bag.minHV;
@@ -618,14 +620,6 @@ void gem::supervisor::tbutils::HVscan::configureAction(toolbox::Event::Reference
     (*chip)->setIShaperFeed(100);
     (*chip)->setIComp(      120);
 
-    (*chip)->setLatency(latency_);
-    (*chip)->setVThreshold1(VT1_);
-    (*chip)->setVThreshold2(VT2_);
-
-    scanParams_.bag.deviceVT1 = (*chip)->getVThreshold1();
-    scanParams_.bag.deviceVT2 = (*chip)->getVThreshold2();
-    scanParams_.bag.latency = (*chip)->getLatency();
-
   }
 
   // flush FIFO, how to disable a specific, misbehaving, chip
@@ -639,9 +633,6 @@ void gem::supervisor::tbutils::HVscan::configureAction(toolbox::Event::Reference
   }
     // once more for luck
   glibDevice_->flushFIFO(readout_mask);
-
-  glibDevice_->setDAQLinkRunParameter(2,scanParams_.bag.deviceVT1);
-  glibDevice_->setDAQLinkRunParameter(3,scanParams_.bag.deviceVT2);
 
   //reset counters
   optohybridDevice_->resetL1ACount(0x5);
@@ -667,10 +658,6 @@ void gem::supervisor::tbutils::HVscan::startAction(toolbox::Event::Reference e)
   sleep(1);
 
   //AppHeader set;
-  latency_   = scanParams_.bag.latency;
-  VT1_   = scanParams_.bag.deviceVT1;
-  VT2_   = scanParams_.bag.deviceVT2;
-
   nTriggers_ = confParams_.bag.nTriggers;
   stepSize_  = scanParams_.bag.stepSize;
   minHV_ = scanParams_.bag.minHV;
@@ -699,23 +686,11 @@ void gem::supervisor::tbutils::HVscan::startAction(toolbox::Event::Reference e)
   optohybridDevice_->sendBC0();          
 
   glibDevice_->setDAQLinkRunType(1);
-  glibDevice_->setDAQLinkRunParameter(1,scanParams_.bag.latency);
-  glibDevice_->setDAQLinkRunParameter(2,scanParams_.bag.deviceVT1);
-  glibDevice_->setDAQLinkRunParameter(3,scanParams_.bag.deviceVT2);
+  glibDevice_->setDAQLinkRunParameter(1,scanParams_.bag.minHV);
 
-
-  for (auto chip = vfatDevice_.begin(); chip != vfatDevice_.end(); ++chip) {
-    (*chip)->setRunMode(1);
-  }
 
   //reset counters
-  optohybridDevice_->resetL1ACount(0x5);
-  optohybridDevice_->resetResyncCount();
-  optohybridDevice_->resetBC0Count();
-  optohybridDevice_->resetCalPulseCount(0x1);
-  optohybridDevice_->sendResync();      
-  optohybridDevice_->sendBC0();          
-  optohybridDevice_->setTrigSource(0x1);// trigger sources   
+  optohybridDevice_->resetL1ACount(0x0);
 
   wl_->submit(runSig_);
 
@@ -732,13 +707,9 @@ void gem::supervisor::tbutils::HVscan::resetAction(toolbox::Event::Reference e)
   is_working_ = true;
   gem::supervisor::tbutils::GEMTBUtil::resetAction(e);
   
-  scanParams_.bag.latency   =  12U;
   scanParams_.bag.minHV     =    0;
   scanParams_.bag.maxHV     =  100;
   scanParams_.bag.stepSize  =  10U;
-  scanParams_.bag.deviceVT1 =  0x0;
-  scanParams_.bag.deviceVT2 =  0x0;
-  
   is_working_     = false;
 }
 
@@ -974,8 +945,165 @@ void gem::supervisor::tbutils::HVscan::sendAMC13trigger()
   //  this->Default(in,out);
 }      
 
+void gem::supervisor::tbutils::HVscan::selectCHAMBER(xgi::Output *out)
+  throw (xgi::exception::Exception)
+{
+  try {
+    bool isDisabled = false;
+    if (is_running_ || is_configured_ || is_initialized_)
+      isDisabled = true;
+    
+    // cgicc::input OHselection;
+    if (isDisabled)
+      *out << cgicc::select().set("name","SetChamber").set("disabled","disabled") 
+	   << cgicc::option("CH1Top").set("value","Chamber1Top")
+	   << cgicc::option("CH1Bot").set("value","Chamber1Bottom")
+	   << cgicc::option("CH2Top").set("value","Chamber2Top")
+	   << cgicc::option("CH2Bot").set("value","Chamber2Bottom")
+	   << cgicc::option("CH3Top").set("value","Chamber3Top")
+	   << cgicc::option("CH3Bot").set("value","Chamber3Bottom")
+	   << cgicc::option("CH4Top").set("value","Chamber4Top")
+	   << cgicc::option("CH4Bot").set("value","Chamber4Bottom")
+	   << cgicc::select().set("disabled","disabled") << std::endl
+	   << "</td>"    << std::endl
+	   << "</tr>"    << std::endl
+	   << "</table>" << std::endl;
+    else
+      *out << cgicc::select().set("name","SetChamber") << std::endl
+	   << cgicc::option("CH1Top").set("value","Chamber1Top")
+	   << cgicc::option("CH1Bot").set("value","Chamber1Bottom")
+	   << cgicc::option("CH2Top").set("value","Chamber2Top")
+	   << cgicc::option("CH2Bot").set("value","Chamber2Bottom")
+	   << cgicc::option("CH3Top").set("value","Chamber3Top")
+	   << cgicc::option("CH3Bot").set("value","Chamber3Bottom")
+	   << cgicc::option("CH4Top").set("value","Chamber4Top")
+	   << cgicc::option("CH4Bot").set("value","Chamber4Bottom")
+	   << cgicc::select()<< std::endl
+	   << "</td>"    << std::endl
+	   << "</tr>"    << std::endl
+	   << "</table>" << std::endl;
+	
+    /*      *out << "<tr><td class=\"title\"> Select Latency Scan: </td>"
+	    << "<td class=\"form\">"*/
+    
+  }//end try
+catch (const xgi::exception::Exception& e) {
+  INFO("Something went wrong setting the trigger source): " << e.what());
+  XCEPT_RAISE(xgi::exception::Exception, e.what());
+ }
+ catch (const std::exception& e) {
+   INFO("Something went wrong setting the trigger source): " << e.what());
+   XCEPT_RAISE(xgi::exception::Exception, e.what());
+ }
+
+}// end void selectoptohybrid
 
 
 
+void gem::supervisor::tbutils::HVscan::setHVvalue()
+  throw (xgi::exception::Exception) {
+  //  is_working_ = true;
+  
+  LOG4CPLUS_INFO(getApplicationLogger(),"-----------start SOAP message to SET HV------ ");
 
+  xdaq::ApplicationDescriptor * d = getApplicationContext()->getDefaultZone()->getApplicationDescriptor("gem::hw::amc13::AMC13Manager", 3);
+  xdaq::ApplicationDescriptor * o = this->getApplicationDescriptor();
+  std::string    appUrn   = "urn:xdaq-application:"+d->getClassName();
+
+  xoap::MessageReference msg_2 = xoap::createMessage();
+  xoap::SOAPPart soap_2 = msg_2->getSOAPPart();
+  xoap::SOAPEnvelope envelope_2 = soap_2.getEnvelope();
+  xoap::SOAPName     parameterset   = envelope_2.createName("ParameterSet","xdaq",XDAQ_NS_URI);
+
+  xoap::SOAPElement  container = envelope_2.getBody().addBodyElement(parameterset);
+  container.addNamespaceDeclaration("xsd","http://www.w3.org/2001/XMLSchema");
+  container.addNamespaceDeclaration("xsi","http://www.w3.org/2001/XMLSchema-instance");
+  //  container.addNamespaceDeclaration("parameterset","http://schemas.xmlsoap.org/soap/encoding/");
+  xoap::SOAPName tname_param    = envelope_2.createName("type","xsi","http://www.w3.org/2001/XMLSchema-instance");
+  xoap::SOAPName pboxname_param = envelope_2.createName("Properties","props",appUrn);
+  xoap::SOAPElement pbox_param = container.addChildElement(pboxname_param);
+  pbox_param.addAttribute(tname_param,"soapenc:Struct");
+
+  xoap::SOAPName pboxname_amc13config = envelope_2.createName("amc13ConfigParams","props",appUrn);
+  xoap::SOAPElement pbox_amc13config = pbox_param.addChildElement(pboxname_amc13config);
+  pbox_amc13config.addAttribute(tname_param,"soapenc:Struct");
+  
+  xoap::SOAPName    soapName_l1A = envelope_2.createName("L1Aburst","props",appUrn);
+  xoap::SOAPElement cs_l1A      = pbox_amc13config.addChildElement(soapName_l1A);
+  cs_l1A.addAttribute(tname_param,"xsd:unsignedInt");
+  cs_l1A.addTextNode(confParams_.bag.nTriggers.toString());
+
+  
+  std::string tool;
+  xoap::dumpTree(msg_2->getSOAPPart().getEnvelope().getDOMNode(),tool);
+  DEBUG("msg_2: " << tool);
+  
+  try 
+    {
+      DEBUG("trying to send parameters");
+      xoap::MessageReference reply_2 = getApplicationContext()->postSOAP(msg_2, *o,  *d);
+      std::string tool;
+      xoap::dumpTree(reply_2->getSOAPPart().getEnvelope().getDOMNode(),tool);
+      DEBUG("reply_2: " << tool);
+    }
+  catch (xoap::exception::Exception& e)
+    {
+      LOG4CPLUS_ERROR(getApplicationLogger(),"------------------Fail  AMC13 configuring parameters message " << e.what());
+      XCEPT_RETHROW (xoap::exception::Exception, "Cannot send message", e);
+    }
+  catch (xdaq::exception::Exception& e)
+    {
+      LOG4CPLUS_ERROR(getApplicationLogger(),"------------------Fail  AMC13 configuring parameters message " << e.what());
+      XCEPT_RETHROW (xoap::exception::Exception, "Cannot send message", e);
+    }
+  catch (std::exception& e)
+    {
+      LOG4CPLUS_ERROR(getApplicationLogger(),"------------------Fail  AMC13 configuring parameters message " << e.what());
+      //XCEPT_RETHROW (xoap::exception::Exception, "Cannot send message", e);
+    }
+  catch (...)
+    {
+      LOG4CPLUS_ERROR(getApplicationLogger(),"------------------Fail  AMC13 configuring parameters message ");
+      XCEPT_RAISE (xoap::exception::Exception, "Cannot send message");
+    }
+
+  //  this->Default(in,out);
+  LOG4CPLUS_INFO(getApplicationLogger(),"-----------The message to AMC13 configuring parameters has been sent------------");
+}      
+
+
+
+  /*
+  xdaq::ApplicationDescriptor * d = getApplicationContext()->getDefaultZone()->getApplicationDescriptor("pvss", 0);
+  xdaq::ApplicationDescriptor * o = this->getApplicationDescriptor();
+  std::string    appUrn   = "urn:xdaq-application:"+d->getClassName();
+  
+
+  xoap::MessageReference msg = xoap::createMessage();
+  xoap::SOAPEnvelope env = msg->getEnvelope();
+  xoap::SOAPBody body = env.getBody();
+  xoap::SOAPName cmdName = env.createName("dpSet","psx",appUrn);
+  xoap::SOAPBodyElement bodyElem = body.addBodyElement(cmdName);
+  // add data point name: <psx::dp name="name">value</psx::dp>                                                                                                                                                                              
+  xoap::SOAPName dpName =  env.createName("dp","psx",appUrn);
+  xoap::SOAPElement dpElement = bodyElem.addChildElement(dpName);
+  xoap::SOAPName nameAttribute = env.createName("name","","");
+  dpElement.addAttribute(nameAttribute, dp);
+  dpElement.addTextNode(value);
+
+  try
+      {
+
+	xoap::MessageReference reply = getApplicationContext()->postSOAP(msg, d);
+	// extract the result from elements in reply message
+      }
+    catch(xoap::exception::Exception& e)
+      {
+	LOG4CPLUS_ERROR(getApplicationLogger(),"------------------Fail  Setting HV  " << e.what());
+	XCEPT_RETHROW (xoap::exception::Exception, "Cannot send message", e);
+    }
+
+  //  this->Default(in,out);
+  LOG4CPLUS_INFO(getApplicationLogger(),"-----------HV was set------------");
+  }   */  
 

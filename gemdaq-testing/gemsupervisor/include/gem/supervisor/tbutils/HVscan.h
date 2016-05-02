@@ -37,6 +37,13 @@ namespace gem {
 	bool sendStartMessageGLIB()
 	  throw (xgi::exception::Exception);
 
+	void setHVvalue()
+	  throw (xgi::exception::Exception);
+	//select OH 
+	virtual void selectCHAMBER(xgi::Output* out)
+	  throw (xgi::exception::Exception);
+
+
         // HyperDAQ interface
         void webDefault(xgi::Input *in, xgi::Output *out)
           throw (xgi::exception::Exception);
@@ -68,16 +75,11 @@ namespace gem {
           //void getFromFile(const std::string& fileName);
           void registerFields(xdata::Bag<ConfigParams> *bag);
 	    
-          xdata::UnsignedInteger latency;
-          xdata::UnsignedShort   stepSize;
+          xdata::String chamber;
 
+          xdata::UnsignedShort   stepSize;
           xdata::Integer minHV;
           xdata::Integer maxHV;
-	    
-          xdata::UnsignedShort currentHisto;
-          xdata::UnsignedShort deviceVT1;
-          xdata::UnsignedShort deviceVT2;
-
         };
 
       private:
@@ -87,7 +89,6 @@ namespace gem {
 	int totaltriggers;
         int minHV_, maxHV_;
         uint64_t stepSize_, latency_, VT1_,VT2_;
-	  
       protected:
 	  
       };
