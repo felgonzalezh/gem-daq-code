@@ -1,52 +1,61 @@
-#CFLAGS = -g3 -O0 -fno-inline
-#CXXFLAGS = -g3 -O0 -fno-inline
-
-BUILD_HOME:=$(shell pwd)/../..
-
-include $(XDAQ_ROOT)/config/mfAutoconf.rules
-include $(XDAQ_ROOT)/config/mfDefs.$(XDAQ_OS)
+#
+# Makefile for gemsupervisor package
+#
 
 #Project=gem
 Project=gemdaq-testing
+ShortProject=gem
 Package=gemsupervisor
 LongPackage=gemsupervisor
 ShortPackage=supervisor
 PackageName=supervisor
 
-Sources= GemSupervisorWeb.cc version.cc
+GEMSUPERVISOR_VER_MAJOR=0
+GEMSUPERVISOR_VER_MINOR=1
+GEMSUPERVISOR_VER_PATCH=0
 
-DynamicLibrary=gem_supervisor
+include $(BUILD_HOME)/$(Project)/config/mfDefs.gem
 
-IncludeDirs = $(uHALROOT)/include
-DependentLibraryDirs = $(uHALROOT)/lib
+Sources =version.cc
+Sources+=tbutils/VFAT2XMLParser.cc
+Sources+=tbutils/GEMTBUtil.cc tbutils/ThresholdScan.cc tbutils/LatencyScan.cc 
+Sources+=GEMSupervisor.cc GEMSupervisorWeb.cc GEMSupervisorMonitor.cc GEMGlobalState.cc
+#Sources+=tbutils/ADCScan.cc
+#Sources+=GEMGLIBSupervisorWeb.cc
 
-#IncludeDirs = \
-#        $(BUILD_HOME)/$(Project)/$(Package)/include \
-#        #$(BUILD_HOME)/$(Project)/$(Package)/include \
-#        $(XDAQ_ROOT)/include \
-#        $(uHALROOT)/include 
-##        $(GLIBTEST)/gembase/include
-#
-#DependentLibraryDirs = \
-#        $(XDAQ_ROOT)/lib \
-#        $(uHALROOT)/lib 
-##        $(GLIBTEST)/gembase/lib 
-#
-#LibraryDirs = \
-#        $(XDAQ_ROOT)/lib \
-#        $(uHALROOT)/lib 
-##        $(GLIBTEST)/gembase/lib 
+DynamicLibrary=gemsupervisor
 
-UserCFlags = -O0 -g3 -fno-inline
-UserCCFlags = -O0 -g3 -fno-inline
-UserDynamicLinkFlags =
-UserStaticLinkFlags =
-#UserExecutableLinkFlags = -Wl,-rpath-link ${XDAQ_ROOT}/lib -Wl,-rpath-link $(uHALROOT)/lib -Wl,-rpath-link ${HCAL_XDAQ_ROOT}/lib \
-#                          -L$(CACTUS_HOME)/lib \
-#                          -lreadline -lncurses -lpthread -lboost_filesystem -lboost_regex -lboost_system -lcactus_extern_pugixml -lcactus_uhal_log -lcactus_uhal_grammars -lcactus_uhal_uhal
+IncludeDirs+=$(BUILD_HOME)/$(Project)/$(Package)/include
+IncludeDirs+=$(BUILD_HOME)/$(Project)/gembase/include
+IncludeDirs+=$(BUILD_HOME)/$(Project)/gemutils/include
+IncludeDirs+=$(BUILD_HOME)/$(Project)/gemhardware/include
+IncludeDirs+=$(BUILD_HOME)/$(Project)/gemreadout/include
+IncludeDirs+=$(BUILD_HOME)/gem-light-dqm/dqm-root/include
+IncludeDirs+=$(uHALROOT)/include
+IncludeDirs+=$(ROOTDIR)/include 
 
-DependentLibraries = config xcept boost_system cactus_uhal_uhal
-Libraries = config xcept numa toolbox asyncresolv uuid log4cplus
+DependentLibraryDirs+=$(BUILD_HOME)/$(Project)/gemhardware/lib/$(XDAQ_OS)/$(XDAQ_PLATFORM)
+DependentLibraryDirs+=$(BUILD_HOME)/$(Project)/gemutils/lib/$(XDAQ_OS)/$(XDAQ_PLATFORM)
+DependentLibraryDirs+=$(BUILD_HOME)/$(Project)/gemreadout/lib/$(XDAQ_OS)/$(XDAQ_PLATFORM)
+DependentLibraryDirs+=$(uHALROOT)/lib
+
+LibraryDirs+=$(uHALROOT)/lib
+
+DependentLibraries+=cactus_uhal_uhal cactus_amc13_amc13
+DependentLibraries+=gemhardware gemutils gemreadout
 
 include $(XDAQ_ROOT)/config/Makefile.rules
+include $(BUILD_HOME)/$(Project)/config/mfRPM_gem.rules
 include $(XDAQ_ROOT)/config/mfRPM.rules
+
+print-env:
+	@echo BUILD_HOME    $(BUILD_HOME)
+	@echo XDAQ_ROOT     $(XDAQ_ROOT)
+	@echo XDAQ_OS       $(XDAQ_OS)
+	@echo XDAQ_PLATFORM $(XDAQ_PLATFORM)
+	@echo LIBDIR        $(LIBDIR)
+	@echo ROOTCFLAGS    $(ROOTCFLAGS)
+	@echo ROOTLIBS      $(ROOTLIBS)
+	@echo ROOTGLIBS     $(ROOTGLIBS)
+	@echo GIT_VERSION   $(GIT_VERSION)
+	@echo GEMDEVELOPER  $(GEMDEVELOPER)
