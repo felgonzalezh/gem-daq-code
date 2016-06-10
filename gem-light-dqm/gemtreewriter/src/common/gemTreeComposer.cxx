@@ -8,6 +8,7 @@
 #include <sstream>
 #include <vector>
 #include <cstdint>
+#include <memory>
 
 #include <TFile.h>
 #include <TNtuple.h>
@@ -72,12 +73,12 @@
 
 using namespace std;
 
-uint16_t gem::readout::GEMslotContents::slot[24] = {
-  0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,
-  0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,
-  0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,
-};
-bool gem::readout::GEMslotContents::isFileRead = false;
+//uint16_t gem::readout::GEMslotContents::slot[24] = {
+//  0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,
+//  0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,
+//  0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,0xfff,
+//};
+//bool gem::readout::GEMslotContents::isFileRead = false;
 
 typedef gem::readout::GEMDataAMCformat::GEMData  AMCGEMData;
 typedef gem::readout::GEMDataAMCformat::GEBData  AMCGEBData;
@@ -151,15 +152,16 @@ C++ any documents
 int main(int argc, char** argv)
 {  
     cout<<"---> Main()"<<endl;
-    if (argc<3) 
+    if (argc<4) 
     {
         cout << "Please provide input and output filenames" << endl;
-        cout << "Usage: <path>/gtc inputFile.dat outputFile.root" << endl;
+        cout << "Usage: <path>/gtc inputFile.dat outputFile.root slot_config.csv" << endl;
         return 0;
     }
     std::string ifile   = argv[1];
     std::string InpType = "Binary";
     const TString ofile = argv[2];
+    std::string slot_file = argv[3];
 
     std::ifstream inpf(ifile.c_str(), std::ios::in|std::ios::binary);
     char c = inpf.get();
@@ -187,10 +189,13 @@ int main(int argc, char** argv)
     const Int_t kUPDATE     = 10;
     bool OKpri = false;
 
-    gem::readout::GEMslotContents::getSlotCfg();
+    std::unique_ptr<gem::readout::GEMslotContents> slotInfo_ = std::unique_ptr<gem::readout::GEMslotContents> (new gem::readout::GEMslotContents(slot_file));
+    //gem::readout::GEMslotContents::getSlotCfg();
+
 
     for(int ievent=0; ievent<ieventMax; ievent++)
     {
+      bool eventStatus = true;
         OKpri = OKprint(ievent,ieventPrint);
         if(inpf.eof()) break;
         if(!inpf.good()) break;
@@ -222,7 +227,7 @@ int main(int argc, char** argv)
         uint32_t ZSFlag  = (0xffffff0000000000 & geb.header) >> 40; 
         uint16_t ChamID  = (0x000000fff0000000 & geb.header) >> 28; 
         uint32_t sumVFAT = (0x000000000fffffff & geb.header);
-        uint16_t  BX     = 0;
+        uint32_t BX      = 0;
 
         if (InpType == "Hex") {
           if(!gem::readout::GEMDataAMCformat::readGEBrunhed(inpf, geb)) break;
@@ -257,12 +262,7 @@ int main(int argc, char** argv)
 
             BX     = vfat.BXfrOH;  
 
-            if( (b1010 != 0xa) || (b1100 != 0xc) || (b1110 != 0xe) ){
-              cout << "VFAT headers do not match expectation" << endl;
-              //gem::readout::GEMDataAMCformat::printVFATdataBits(ievent, vfat);
-              ifake++;
-            }//end if 1010,1100,1110
-      
+     
             // CRC check
             dataVFAT[11] = vfat.BC;
             dataVFAT[10] = vfat.EC;
@@ -278,12 +278,21 @@ int main(int argc, char** argv)
             uint16_t checkedCRC = checkCRC(OKpri);
     
             uint32_t ZSFlag24 = ZSFlag;
-            int islot = -1;
-            for (int ibin = 0; ibin < 24; ibin++){
-              if ( (ChipID == gem::readout::GEMslotContents::slot[ibin]) && ((ZSFlag >> (23-ibin)) & 0x1) ) islot = ibin;
-            }//end for
-      
-            VFATdata *VFATdata_ = new VFATdata(b1010, BC, b1100, EC, Flag, b1110, ChipID, lsData, msData, CRC);
+            int islot = slotInfo_->GEBslotIndex(ChipID);
+//            for (int ibin = 0; ibin < 24; ibin++){
+//              if ( (ChipID == gem::readout::GEMslotContents::slot[ibin]) && ((ZSFlag >> (23-ibin)) & 0x1) ) islot = ibin;
+//            }//end for
+//
+            bool blockStatus = true;
+            if( (b1010 != 0xa) || (b1100 != 0xc) || (b1110 != 0xe) || (islot < 0) || (islot > 23)){
+              cout << "VFAT headers do not match expectation" << endl;
+              blockStatus = false;
+              eventStatus = false;
+              //gem::readout::GEMDataAMCformat::printVFATdataBits(ievent, vfat);
+              ifake++;
+            }//end if 1010,1100,1110
+  
+            VFATdata *VFATdata_ = new VFATdata(b1010, BC, b1100, EC, Flag, b1110, ChipID, lsData, msData, CRC, checkedCRC, islot, blockStatus);
             GEBdata_->addVFATData(*VFATdata_);
             delete VFATdata_;
 
@@ -321,8 +330,13 @@ int main(int argc, char** argv)
           if(!gem::readout::GEMDataAMCformat::readGEMtr1Binary(inpf, gem)) break;
         }
         
-        ev->Build(0,0,0,BX,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-        ev->addGEBdata(*GEBdata_);
+        AMCdata *AMCdata_ = new AMCdata(0,0,0,BX,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+        AMCdata_->addGEBdata(*GEBdata_);
+        delete GEBdata_;
+
+        ev->Build(eventStatus);
+        ev->addAMCdata(*AMCdata_);
+        delete AMCdata_;
         GEMtree.Fill();
         ev->Clear();
 
